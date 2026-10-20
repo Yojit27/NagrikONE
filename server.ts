@@ -89,6 +89,19 @@ const emailRateLimiter = createRateLimiter(
 
 app.use(express.json({ limit: '25mb' }));
 
+// Security: Sanitize sensitive credentials and tokens from messages before logging
+function sanitizeError(err: unknown): string {
+  if (!err) return '';
+  const message =
+    typeof err === 'object' && err !== null && 'message' in err
+      ? String((err as any).message)
+      : String(err);
+  return message
+    .replace(/AIza[0-9A-Za-z-_]{35}/g, '[REDACTED_KEY]')
+    .replace(/Bearer\s+[A-Za-z0-9-_=.]+/gi, 'Bearer [REDACTED_TOKEN]')
+    .replace(/(?:password|pass|secret|token)=([^&\s]+)/gi, '$1=[REDACTED]');
+}
+
 // Helper withTimeout to prevent any external API hangs
 const withTimeout = <T>(promise: Promise<T>, ms = 6500): Promise<T> => {
   return Promise.race([
@@ -230,7 +243,7 @@ app.get('/api/system/status', (_req, res) => {
     success: true,
     gemini: {
       active: hasGeminiKey,
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.8-flash',
       status: hasGeminiKey ? 'Online & Authenticated' : 'Heuristic Demo Mode',
       keyDetected: hasGeminiKey,
     },
@@ -256,8 +269,8 @@ app.get('/api/reports', optionalAuth, async (req: AuthRequest, res) => {
     const reportsList = await getAllReports(userUid);
     res.json({ success: true, data: reportsList });
   } catch (error: any) {
-    console.error('Failed to fetch reports from Cloud SQL:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch reports' });
+    console.error('Failed to fetch reports from Cloud SQL:', sanitizeError(error));
+    res.status(500).json({ error: 'Failed to fetch reports' });
   }
 });
 
@@ -277,12 +290,12 @@ app.post('/api/reports', optionalAuth, async (req: AuthRequest, res) => {
     const userUid = req.user?.uid;
     const created = await createReport(reportData, userUid);
     if (userUid) {
-      await updateUserKarma(userUid, 15).catch((e) => console.warn('Karma update skipped:', e));
+      await updateUserKarma(userUid, 15).catch((e) => console.warn('Karma update skipped:', sanitizeError(e)));
     }
     res.json({ success: true, data: created });
   } catch (error: any) {
-    console.error('Failed to create report in Cloud SQL:', error);
-    res.status(500).json({ error: error.message || 'Failed to create report' });
+    console.error('Failed to create report in Cloud SQL:', sanitizeError(error));
+    res.status(500).json({ error: 'Failed to create report' });
   }
 });
 
@@ -294,8 +307,8 @@ app.post('/api/reports/:id/upvote', optionalAuth, async (req: AuthRequest, res) 
     const result = await toggleReportUpvote(reportId, userUid);
     res.json({ success: true, ...result });
   } catch (error: any) {
-    console.error('Failed to toggle upvote in Cloud SQL:', error);
-    res.status(500).json({ error: error.message || 'Failed to toggle upvote' });
+    console.error('Failed to toggle upvote in Cloud SQL:', sanitizeError(error));
+    res.status(500).json({ error: 'Failed to toggle upvote' });
   }
 });
 
@@ -310,8 +323,8 @@ app.patch('/api/reports/:id', optionalAuth, async (req: AuthRequest, res) => {
     }
     res.json({ success: true, data: updated });
   } catch (error: any) {
-    console.error('Failed to update report in Cloud SQL:', error);
-    res.status(500).json({ error: error.message || 'Failed to update report' });
+    console.error('Failed to update report in Cloud SQL:', sanitizeError(error));
+    res.status(500).json({ error: 'Failed to update report' });
   }
 });
 
@@ -360,8 +373,8 @@ app.get('/api/reports/:id/comments', async (req, res) => {
     const commentsList = await getReportComments(reportId);
     res.json({ success: true, data: commentsList });
   } catch (error: any) {
-    console.error('Failed to get comments from Cloud SQL:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch comments' });
+    console.error('Failed to get comments from Cloud SQL:', sanitizeError(error));
+    res.status(500).json({ error: 'Failed to fetch comments' });
   }
 });
 
@@ -378,8 +391,8 @@ app.post('/api/reports/:id/comments', optionalAuth, async (req: AuthRequest, res
     const comment = await addReportComment(reportId, authorUid, name, content);
     res.json({ success: true, data: comment });
   } catch (error: any) {
-    console.error('Failed to add comment in Cloud SQL:', error);
-    res.status(500).json({ error: error.message || 'Failed to add comment' });
+    console.error('Failed to add comment in Cloud SQL:', sanitizeError(error));
+    res.status(500).json({ error: 'Failed to add comment' });
   }
 });
 
@@ -393,8 +406,8 @@ app.get('/api/user/profile', requireAuth, async (req: AuthRequest, res) => {
     const userRecord = await getOrCreateUser(uid, email, name, picture);
     res.json({ success: true, data: userRecord });
   } catch (error: any) {
-    console.error('Failed to fetch/upsert user in Cloud SQL:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch user' });
+    console.error('Failed to fetch/upsert user in Cloud SQL:', sanitizeError(error));
+    res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
 
@@ -441,7 +454,7 @@ Provide a structured municipal dispatch report in JSON with:
 
     parts.push({ text: prompt });
 
-    const triageModels = ['gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'];
+    const triageModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
     let response: any = null;
     let triageErr: any = null;
 
@@ -497,12 +510,11 @@ Provide a structured municipal dispatch report in JSON with:
     const parsed = JSON.parse(response.text?.trim() || '{}');
     return res.json({ success: true, data: parsed, source: 'gemini' });
   } catch (error: any) {
-    console.warn('Fallback triage engaged:', error.message);
+    console.warn('Fallback triage engaged:', sanitizeError(error));
     return res.json({
       success: true,
       data: fallbackTriage(userText),
       source: 'fallback',
-      error: error.message,
     });
   }
 });
@@ -697,7 +709,7 @@ Return JSON matching this schema:
 }`;
 
         // Multimodal models with active quota supporting vision input & structured schema
-        const candidateModels = ['gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'];
+        const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
         let response: any = null;
         let lastError: any = null;
 
@@ -825,7 +837,7 @@ Return JSON matching this schema:
 
           console.error('[Gemini Vision] Vision analysis failed:', {
             status: errStatus,
-            message: errMsg.slice(0, 200),
+            message: sanitizeError(errMsg).slice(0, 200),
           });
 
           if (errMsg.includes('Timeout') || errMsg.includes('timed out')) {
@@ -901,7 +913,7 @@ Return JSON matching this schema:
         }
       }
     } catch (unexpectedErr: any) {
-      console.error('[Gemini Vision] Unexpected exception in vision handler:', unexpectedErr.message || unexpectedErr);
+      console.error('[Gemini Vision] Unexpected exception in vision handler:', sanitizeError(unexpectedErr));
       geminiResult = {
         status: 'Check unavailable',
         assessmentRaw: 'unavailable',
@@ -1075,7 +1087,7 @@ Draft requirements:
 
     let response: any = null;
     let rtiErr: any = null;
-    for (const m of ['gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-3.5-flash']) {
+    for (const m of ['gemini-3.8-flash', 'gemini-3.1-flash-lite']) {
       try {
         const callPromise = ai.models.generateContent({
           model: m,
@@ -1096,7 +1108,7 @@ Draft requirements:
       source: 'gemini',
     });
   } catch (error: any) {
-    console.warn('Fallback RTI engaged:', error.message);
+    console.warn('Fallback RTI engaged:', sanitizeError(error));
     return res.json({
       success: true,
       draft: generateFallbackRti(report),
@@ -1140,7 +1152,7 @@ The letter must cite breach of Municipal Citizen's Charter, public safety hazard
 
     let response: any = null;
     let escErr: any = null;
-    for (const m of ['gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-3.5-flash']) {
+    for (const m of ['gemini-3.8-flash', 'gemini-3.1-flash-lite']) {
       try {
         const callPromise = ai.models.generateContent({
           model: m,
@@ -1161,7 +1173,7 @@ The letter must cite breach of Municipal Citizen's Charter, public safety hazard
       source: 'gemini',
     });
   } catch (error: any) {
-    console.warn('Fallback Escalation engaged:', error.message);
+    console.warn('Fallback Escalation engaged:', sanitizeError(error));
     return res.json({
       success: true,
       letter: generateFallbackEscalation(report, officerType),
@@ -1206,7 +1218,7 @@ Always provide actionable steps, realistic turnaround times, and statutory escal
 
     let response: any = null;
     let chatErr: any = null;
-    for (const m of ['gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-3.5-flash']) {
+    for (const m of ['gemini-3.8-flash', 'gemini-3.1-flash-lite']) {
       try {
         const callPromise = ai.models.generateContent({
           model: m,
@@ -1231,7 +1243,7 @@ Always provide actionable steps, realistic turnaround times, and statutory escal
       source: 'gemini',
     });
   } catch (error: any) {
-    console.warn('Fallback chat engaged:', error.message);
+    console.warn('Fallback chat engaged:', sanitizeError(error));
     return res.json({
       success: true,
       reply: generateFallbackChat(lastUserMsg),
