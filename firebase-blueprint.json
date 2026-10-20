@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "user": {
+      "title": "UserProfile",
+      "description": "Citizen profile in Nagrik One",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "karmaPoints": { "type": "number" },
+        "ward": { "type": "string", "maxLength": 64 },
+        "city": { "type": "string", "maxLength": 64 },
+        "levelNumber": { "type": "number" },
+        "levelTitle": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["uid", "email"]
+    },
+    "report": {
+      "title": "CivicReport",
+      "description": "Civic grievance report",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 256 },
+        "description": { "type": "string", "maxLength": 2048 },
+        "category": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "maxLength": 32 },
+        "priority": { "type": "string", "maxLength": 32 },
+        "reportedBy": { "type": "string", "maxLength": 128 },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "imageUrl": { "type": "string", "maxLength": 2048 },
+        "storagePath": { "type": "string", "maxLength": 512 },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "address": { "type": "string", "maxLength": 512 },
+        "department": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "title", "description", "category", "status", "reportedBy"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "Citizen user profile"
+    },
+    "/reports/{reportId}": {
+      "schema": "report",
+      "description": "Civic reports collection"
+    }
+  }
+}

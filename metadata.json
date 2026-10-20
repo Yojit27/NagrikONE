@@ -1,0 +1,9 @@
+{
+  "name": "NagrikOne AI - Citizen Civic Reporting & Governance Platform",
+  "description": "AI-powered citizen civic reporting platform with live geolocation maps, automated municipal department routing, AI severity triage, RTI drafting, multilingual voice support, and civic karma badges.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

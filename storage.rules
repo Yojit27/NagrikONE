@@ -1,0 +1,28 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Reports directory for civic evidence images
+    match /reports/{reportId}/{fileName} {
+      // Anyone can view civic grievance photos in the feed and map
+      allow read: if true;
+
+      // Only authenticated users can upload report evidence images
+      // Restricted to image files under 10MB
+      allow write: if request.auth != null
+                   && request.resource.size <= 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+
+      // Allow authors to clean up or retract their uploaded photos
+      allow delete: if request.auth != null && (
+        resource.metadata == null ||
+        resource.metadata.uploadedBy == null ||
+        resource.metadata.uploadedBy == request.auth.uid
+      );
+    }
+
+    // Default deny for all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

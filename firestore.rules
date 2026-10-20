@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User profiles: strictly owner can read and write their own profile
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+      allow create, update: if isOwner(userId) && isValidId(userId);
+      allow delete: if false;
+    }
+
+    // Reports: public read, authenticated citizen create/update/upvote/delete
+    match /reports/{reportId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(reportId) &&
+                   request.resource.data.authorUid == request.auth.uid;
+      allow update: if isValidId(reportId) && (
+        (isSignedIn() && (
+          request.auth.uid == resource.data.authorUid ||
+          (resource.data.authorUid == null && request.auth.token.email != null && request.auth.token.email == resource.data.reportedBy)
+        )) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes', 'updatedAt']))
+      );
+      allow delete: if isSignedIn() && isValidId(reportId) && (
+        request.auth.uid == resource.data.authorUid ||
+        (resource.data.authorUid == null && request.auth.token.email != null && request.auth.token.email == resource.data.reportedBy)
+      );
+    }
+  }
+}

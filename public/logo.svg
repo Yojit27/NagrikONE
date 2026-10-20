@@ -1,0 +1,143 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="100%" height="100%">
+  <defs>
+    <!-- Background Pin Gradient -->
+    <linearGradient id="pinOuterGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d70e2" />
+      <stop offset="50%" stop-color="#0e4b9e" />
+      <stop offset="100%" stop-color="#08275c" />
+    </linearGradient>
+
+    <!-- Map Fold Gradients -->
+    <linearGradient id="mapLeftGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e88e5" />
+      <stop offset="100%" stop-color="#0d47a1" />
+    </linearGradient>
+    <linearGradient id="mapCenterGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0288d1" />
+      <stop offset="100%" stop-color="#01579b" />
+    </linearGradient>
+    <linearGradient id="mapRightGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00acc1" />
+      <stop offset="100%" stop-color="#00897b" />
+    </linearGradient>
+
+    <!-- Checkmark Badge Gradient -->
+    <linearGradient id="checkBadgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="40%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+
+    <!-- Clip path for Pin interior -->
+    <clipPath id="pinInnerClip">
+      <circle cx="500" cy="340" r="160" />
+    </clipPath>
+  </defs>
+
+  <!-- FOLDED MAP BASE (Below Pin) -->
+  <g id="map-base">
+    <!-- Left Wing (Fold 1) -->
+    <polygon points="245,585 365,510 435,550 310,615" fill="url(#mapLeftGrad)" />
+
+    <!-- Center-Left Fold (Fold 2) -->
+    <polygon points="365,510 500,615 435,550" fill="#0d47a1" />
+    
+    <!-- Left Wing Main Slope -->
+    <polygon points="245,585 365,510 500,615 350,605" fill="#1976d2" />
+
+    <!-- Right Wing Slopes (Fold 3 & 4) -->
+    <polygon points="500,615 635,510 755,585 625,595" fill="url(#mapRightGrad)" />
+    <polygon points="500,615 565,550 635,510" fill="#00695c" />
+    
+    <!-- Map perspective shadow rim -->
+    <polygon points="245,585 350,605 500,615 625,595 755,585 640,610 500,622 330,610" fill="#0288d1" opacity="0.4" />
+
+    <!-- Target ground ellipse ring -->
+    <ellipse cx="500" cy="540" rx="80" ry="22" fill="none" stroke="#ffffff" stroke-width="14" opacity="0.95" />
+    <ellipse cx="500" cy="540" rx="50" ry="13" fill="none" stroke="#38bdf8" stroke-width="4" opacity="0.8" />
+  </g>
+
+  <!-- MAIN MAP PIN -->
+  <g id="map-pin">
+    <!-- Outer teardrop pointer pin path -->
+    <!-- Center of head circle: (500, 335), radius 195. Tip at (500, 560) -->
+    <path d="M 500 560
+             C 475 525, 305 380, 305 335
+             A 195 195 0 1 1 695 335
+             C 695 380, 525 525, 500 560 Z"
+          fill="url(#pinOuterGrad)"
+          filter="drop-shadow(0px 8px 16px rgba(10,37,88,0.25))" />
+
+    <!-- Pin Inner Dark Circle Background -->
+    <circle cx="500" cy="335" r="160" fill="#0a2558" />
+
+    <!-- City Skyline & Citizens clipped inside inner circle -->
+    <g clip-path="url(#pinInnerClip)">
+      <!-- CITY SKYLINE (White silhouette backdrop) -->
+      <g fill="#ffffff" opacity="0.98">
+        <!-- Left low building -->
+        <rect x="350" y="300" width="25" height="120" rx="2" />
+        <!-- Left building with antenna/window notch -->
+        <rect x="378" y="270" width="32" height="150" rx="2" />
+        <rect x="390" y="248" width="6" height="22" />
+        <rect x="395" y="260" width="30" height="8" />
+        <!-- Mid-left tall skyscraper -->
+        <rect x="413" y="250" width="38" height="170" rx="2" />
+        <rect x="425" y="225" width="8" height="25" />
+        <!-- Center high-rise tower (tallest) -->
+        <rect x="455" y="215" width="45" height="205" rx="2" />
+        <rect x="470" y="190" width="12" height="25" />
+        <rect x="475" y="175" width="3" height="15" />
+        <rect x="463" y="235" width="28" height="6" fill="#0a2558" opacity="0.8" />
+        <!-- Mid-right high-rise tower -->
+        <rect x="504" y="235" width="40" height="185" rx="2" />
+        <rect x="520" y="210" width="6" height="25" />
+        <!-- Right side tower -->
+        <rect x="548" y="255" width="34" height="165" rx="2" />
+        <rect x="585" y="275" width="28" height="145" rx="2" />
+        <rect x="615" y="310" width="25" height="110" rx="2" />
+      </g>
+
+      <!-- CITIZEN SILHOUETTES (3 Figures in white, front and center) -->
+      <g fill="#ffffff">
+        <!-- Left citizen (flanking, slightly smaller) -->
+        <circle cx="425" cy="350" r="24" />
+        <path d="M 385 435 C 385 390, 465 390, 465 435 Z" />
+
+        <!-- Right citizen (flanking, slightly smaller) -->
+        <circle cx="575" cy="350" r="24" />
+        <path d="M 535 435 C 535 390, 615 390, 615 435 Z" />
+
+        <!-- Center citizen (prominent, in front) -->
+        <!-- Subtle dark outline to separate from flanking citizens -->
+        <circle cx="500" cy="330" r="34" stroke="#0a2558" stroke-width="7" />
+        <path d="M 445 440 C 445 375, 555 375, 555 440 Z" stroke="#0a2558" stroke-width="7" />
+      </g>
+    </g>
+
+    <!-- GREEN VERIFIED CHECKMARK BADGE (Top Right Shoulder) -->
+    <g id="checkmark-badge" filter="drop-shadow(0px 4px 10px rgba(16,185,129,0.35))">
+      <circle cx="670" cy="390" r="56" fill="#ffffff" />
+      <circle cx="670" cy="390" r="50" fill="url(#checkBadgeGrad)" />
+      <!-- Crisp checkmark path -->
+      <path d="M 648 390 L 664 406 L 696 374"
+            fill="none"
+            stroke="#ffffff"
+            stroke-width="11"
+            stroke-linecap="round"
+            stroke-linejoin="round" />
+    </g>
+  </g>
+
+  <!-- TYPOGRAPHY: "NagrikOne" -->
+  <g id="brand-text" text-anchor="middle">
+    <text x="500" y="755" font-family="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" font-size="120" font-weight="900" letter-spacing="-1.5">
+      <tspan fill="#0c2340">Nagrik</tspan><tspan fill="#1e70e9">One</tspan>
+    </text>
+
+    <!-- Slogan / Tagline: "Your City. Your Voice. Our Action." -->
+    <text x="500" y="825" font-family="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" font-size="34" font-weight="700" fill="#1e293b" letter-spacing="2.2">
+      Your City.  Your Voice.  Our Action.
+    </text>
+  </g>
+</svg>

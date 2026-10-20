@@ -1,0 +1,15 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+*.pem
+*.key
+*.cert
+service-account*.json
+*service_account*.json
+*-credentials.json
+*.local
