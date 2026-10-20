@@ -22,7 +22,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { playSuccessChime } from '../utils/audio';
 import confetti from 'canvas-confetti';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { firebaseConfig } from '../lib/firebase';
 
 export type AuthMode = 'login' | 'signup' | 'forgot' | 'verify_pending';
 

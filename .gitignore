@@ -13,3 +13,5 @@ service-account*.json
 *service_account*.json
 *-credentials.json
 *.local
+firebase-applet-config.json
+firebase_applet_config.xml
