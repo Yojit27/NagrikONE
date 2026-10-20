@@ -615,7 +615,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="e.g. Yojit Chawla"
+                      placeholder="e.g. Rajesh Kumar"
                       className="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
                     />
                   </div>
