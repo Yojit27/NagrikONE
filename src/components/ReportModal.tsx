@@ -44,6 +44,7 @@ import { playSuccessChime } from '../utils/audio';
 import { convertToGenuineJpg, formatFileSize, ConvertedJpgImage } from '../utils/imageConverter';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../context/AuthContext';
+import { useLanguageTheme } from '../context/LanguageThemeContext';
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -112,6 +113,21 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     sendVerificationEmail,
     resendCooldown,
   } = useAuth();
+  const { t, language } = useLanguageTheme();
+
+  const getCatLabel = (catId: string, fallback: string) => {
+    const map: Record<string, string> = {
+      road_pothole: 'catPothole',
+      garbage_waste: 'catGarbage',
+      streetlight: 'catStreetlight',
+      water_drainage: 'catWater',
+      traffic_parking: 'catTraffic',
+      public_infrastructure: 'catInfrastructure',
+      sanitation: 'catSanitation',
+    };
+    const key = map[catId];
+    return key ? t(key, fallback) : fallback;
+  };
 
   const citizenEmail = user?.email || profile?.email || '';
   const [checkingAuthVerification, setCheckingAuthVerification] = useState(false);
@@ -161,13 +177,34 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   };
 
   const [title, setTitle] = useState('');
+  const [titleEn, setTitleEn] = useState('');
+  const [titleReviewed, setTitleReviewed] = useState(false);
+  const [isTranslatingTitle, setIsTranslatingTitle] = useState(false);
+
   const [description, setDescription] = useState('');
+  const [descriptionEn, setDescriptionEn] = useState('');
+  const [descriptionReviewed, setDescriptionReviewed] = useState(false);
+  const [isTranslatingDesc, setIsTranslatingDesc] = useState(false);
+  const [isTranslationOutdated, setIsTranslationOutdated] = useState(false);
+
   const [category, setCategory] = useState<CivicCategoryType>('road_pothole');
   const [priority, setPriority] = useState<PriorityLevel>('high');
   const [severityScore, setSeverityScore] = useState<number>(7);
   const [severityLabel, setSeverityLabel] = useState<string>('High Priority');
   const [department, setDepartment] = useState<string>('Public Works Department (PWD)');
   const [slaHours, setSlaHours] = useState<number>(72);
+
+  // Priorities 1, 2, 3: AI Enhancement & Triage State
+  const [userHasManuallySelectedCategory, setUserHasManuallySelectedCategory] = useState(false);
+  const [polishedDescriptionEn, setPolishedDescriptionEn] = useState('');
+  const [activeDescriptionTab, setActiveDescriptionTab] = useState<'original' | 'polished'>('original');
+  const [isEditingPolished, setIsEditingPolished] = useState(false);
+  const [severityIndex, setSeverityIndex] = useState<number>(70);
+  const [severityConfidence, setSeverityConfidence] = useState<number>(0.85);
+  const [severityExplanation, setSeverityExplanation] = useState<string>('Evaluated based on reported conditions.');
+  const [isInsufficientInfo, setIsInsufficientInfo] = useState<boolean>(false);
+  const [aiDetectedCategory, setAiDetectedCategory] = useState<CivicCategoryType | null>(null);
+  const [categoryExplanation, setCategoryExplanation] = useState<string>('');
   
   // Photo Evidence State (Enforces Min 2, Max 3, Converted to genuine JPG)
   const [photos, setPhotos] = useState<ConvertedJpgImage[]>([]);
@@ -182,10 +219,13 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 
   const primaryPhotoUrl = photos[0]?.dataUrl || '';
 
-
   const [latitude, setLatitude] = useState<number>(userLocation?.latitude || 28.6289);
   const [longitude, setLongitude] = useState<number>(userLocation?.longitude || 77.2065);
   const [address, setAddress] = useState<string>('Ring Road near Metro Pillar 142, Ward 42');
+  const [addressEn, setAddressEn] = useState<string>('');
+  const [addressReviewed, setAddressReviewed] = useState(false);
+  const [isTranslatingAddress, setIsTranslatingAddress] = useState(false);
+
   const [ward, setWard] = useState<string>('Ward 42 (Civil Lines)');
   const [safetyHazards, setSafetyHazards] = useState<string[]>([
     'Commuter fall hazard',
@@ -193,8 +233,8 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   ]);
   const [adminSummary, setAdminSummary] = useState<string>('');
 
-  // AI Triage State
-  const [isTriaging, setIsTriaging] = useState(false);
+  // AI Translation & Triage State
+  const [isTranslatingAll, setIsTranslatingAll] = useState(false);
   const [triageSuccess, setTriageSuccess] = useState(false);
 
   // Dual Independent Verification State (TinyFish Online Reuse + Gemini AI Detection)
@@ -202,52 +242,282 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const [verifyingIndices, setVerifyingIndices] = useState<Record<number, boolean>>({});
   const [activeVerificationPhotoIndex, setActiveVerificationPhotoIndex] = useState<number>(0);
   const [expandedEvidence, setExpandedEvidence] = useState<Record<number, boolean>>({});
-
-  // Voice recording state
-  const [isRecording, setIsRecording] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
-  // Handle Speech Recognition
-  const toggleVoiceRecording = () => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  interface RetainedAudio {
+    blob: Blob;
+    mimeType: string;
+    base64: string;
+    durationMs: number;
+    recordedAt: number;
+  }
 
-    if (!SpeechRecognition) {
-      alert('Speech recognition is not supported in this browser. Please type your grievance.');
+  // Voice recording state via Gemini 3.5 Transcribe with in-memory retention & retry
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
+  const [hasRetainedAudio, setHasRetainedAudio] = useState(false);
+  const [retainedDurationSec, setRetainedDurationSec] = useState<number>(0);
+
+  const retainedAudioRef = React.useRef<RetainedAudio | null>(null);
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const activeStreamRef = React.useRef<MediaStream | null>(null);
+  const audioChunksRef = React.useRef<Blob[]>([]);
+  const recordingStartTimeRef = React.useRef<number>(0);
+  const transcriptionSeqRef = React.useRef<number>(0);
+  const userEditedDuringTranscriptionRef = React.useRef<boolean>(false);
+  const descriptionAtStartRef = React.useRef<string>('');
+  const isStartingRecordingRef = React.useRef<boolean>(false);
+
+  // Clean up any hardware microphone streams and memory on unmount
+  React.useEffect(() => {
+    return () => {
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getTracks().forEach((track) => track.stop());
+        activeStreamRef.current = null;
+      }
+      retainedAudioRef.current = null;
+    };
+  }, []);
+
+  // Execute transcription using captured in-memory audio
+  const executeTranscription = async (seqId: number, audioPayload?: RetainedAudio) => {
+    const audioData = audioPayload || retainedAudioRef.current;
+    if (!audioData) return;
+
+    setIsTranscribing(true);
+    setTranscriptionError(null);
+
+    try {
+      const res = await fetch('/api/ai/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audioBase64: audioData.base64,
+          mimeType: audioData.mimeType,
+        }),
+      });
+
+      // Guard: Ignore late or superseded responses
+      if (seqId !== transcriptionSeqRef.current) {
+        return;
+      }
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Server responded with ${res.status}`);
+      }
+
+      const json = await res.json();
+      if (json.success) {
+        const incoming = (json.transcript || '').trim();
+        if (incoming) {
+          setDescription((current) => {
+            // If user typed during recording or in-flight transcription, append cleanly
+            if (userEditedDuringTranscriptionRef.current) {
+              return current ? `${current} ${incoming}` : incoming;
+            }
+            // Otherwise, combine with baseline text before recording began (prevents duplicate doubling on retry)
+            const baseline = descriptionAtStartRef.current.trim();
+            return baseline ? `${baseline} ${incoming}` : incoming;
+          });
+          playSuccessChime();
+          setTranscriptionError(null);
+        } else {
+          setTranscriptionError(
+            'Gemini 3.5 Transcribe completed but detected no audible speech. Audio retained for retry.'
+          );
+        }
+      } else {
+        throw new Error(json.error || 'Transcription response failed.');
+      }
+    } catch (err: any) {
+      console.error('Transcription execution error:', err);
+      if (seqId === transcriptionSeqRef.current) {
+        setTranscriptionError(
+          `Speech-to-text failed: ${err.message || 'Service unreachable'}. Captured audio is retained in memory.`
+        );
+      }
+    } finally {
+      if (seqId === transcriptionSeqRef.current) {
+        setIsTranscribing(false);
+      }
+    }
+  };
+
+  const handleRetryTranscription = () => {
+    if (!retainedAudioRef.current || isTranscribing) return;
+    const newSeq = ++transcriptionSeqRef.current;
+    userEditedDuringTranscriptionRef.current = false;
+    executeTranscription(newSeq, retainedAudioRef.current);
+  };
+
+  const handleDiscardRetainedAudio = () => {
+    retainedAudioRef.current = null;
+    setHasRetainedAudio(false);
+    setTranscriptionError(null);
+    setRetainedDurationSec(0);
+  };
+
+  // Multilingual Speech-to-Text via Gemini 3.5 Transcribe (/api/ai/transcribe)
+  const toggleVoiceRecording = async () => {
+    // Prevent duplicate action during active transcription
+    if (isTranscribing) {
       return;
     }
 
     if (isRecording) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          if (mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.requestData();
+          }
+        } catch (flushErr) {
+          console.warn('MediaRecorder requestData flush notice:', flushErr);
+        }
+        mediaRecorderRef.current.stop();
+      }
       setIsRecording(false);
+      return;
+    }
+
+    if (isStartingRecordingRef.current) return;
+    isStartingRecordingRef.current = true;
+    setTranscriptionError(null);
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        fallbackWebSpeech();
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      activeStreamRef.current = stream;
+      audioChunksRef.current = [];
+      recordingStartTimeRef.current = Date.now();
+      descriptionAtStartRef.current = description;
+      userEditedDuringTranscriptionRef.current = false;
+
+      const mimeCandidates = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4',
+        'audio/aac',
+      ];
+      const preferredMime = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || '';
+
+      const recorder = preferredMime
+        ? new MediaRecorder(stream, { mimeType: preferredMime })
+        : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        if (activeStreamRef.current) {
+          activeStreamRef.current.getTracks().forEach((track) => track.stop());
+          activeStreamRef.current = null;
+        }
+
+        const durationMs = Date.now() - recordingStartTimeRef.current;
+        if (durationMs < 400 || audioChunksRef.current.length === 0) {
+          setTranscriptionError('Recording was too short. Please speak your grievance clearly and tap stop.');
+          return;
+        }
+
+        const mimeType = recorder.mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+
+        if (audioBlob.size < 400) {
+          setTranscriptionError('No audible speech detected. Please speak closer to your microphone.');
+          return;
+        }
+
+        try {
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = () => {
+            const dataUrl = reader.result as string;
+            // Extract raw base64 payload and clean base MIME type (RFC 2397)
+            const commaIndex = dataUrl.indexOf(',');
+            const rawBase64 = commaIndex !== -1 ? dataUrl.slice(commaIndex + 1).trim() : dataUrl.trim();
+            const cleanMime = (mimeType || 'audio/webm').split(';')[0].trim().toLowerCase();
+
+            const retained: RetainedAudio = {
+              blob: audioBlob,
+              mimeType: cleanMime,
+              base64: rawBase64,
+              durationMs,
+              recordedAt: Date.now(),
+            };
+            retainedAudioRef.current = retained;
+            setHasRetainedAudio(true);
+            setRetainedDurationSec(Math.round(durationMs / 100) / 10);
+
+            const seqId = ++transcriptionSeqRef.current;
+            executeTranscription(seqId, retained);
+          };
+        } catch (readErr: any) {
+          console.error('Blob read error:', readErr);
+          setTranscriptionError('Failed to process captured audio.');
+        }
+      };
+
+      recorder.start(250);
+      setIsRecording(true);
+    } catch (err: any) {
+      console.warn('MediaRecorder init failed, falling back to Web Speech:', err);
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+        setTranscriptionError(t('voicePermissionError', 'Microphone permission denied. Please allow microphone access or type your grievance.'));
+      } else {
+        fallbackWebSpeech();
+      }
+    } finally {
+      isStartingRecordingRef.current = false;
+    }
+  };
+
+  const fallbackWebSpeech = () => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setTranscriptionError(t('voicePermissionError', 'Microphone permission denied or unsupported. Please type manually.'));
       return;
     }
 
     try {
       const recognition = new SpeechRecognition();
-      recognition.lang = 'en-IN'; // Indian English / Hindi mix
+      recognition.lang =
+        language === 'hi'
+          ? 'hi-IN'
+          : language === 'pa'
+          ? 'pa-IN'
+          : language === 'bn'
+          ? 'bn-IN'
+          : language === 'mr'
+          ? 'mr-IN'
+          : language === 'kn'
+          ? 'kn-IN'
+          : 'en-IN';
       recognition.interimResults = false;
       recognition.maxAlternatives = 1;
 
-      recognition.onstart = () => {
-        setIsRecording(true);
-      };
-
+      recognition.onstart = () => setIsRecording(true);
       recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
         setDescription((prev) => (prev ? `${prev} ${transcript}` : transcript));
         setIsRecording(false);
       };
-
-      recognition.onerror = () => {
-        setIsRecording(false);
-      };
-
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
-
+      recognition.onerror = () => setIsRecording(false);
+      recognition.onend = () => setIsRecording(false);
       recognition.start();
     } catch (e) {
       console.warn('Voice error:', e);
@@ -301,18 +571,68 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     }
   };
 
-  // Run Gemini AI Triage
-  const handleAiTriage = async () => {
-    if (!description && !title) {
-      alert('Please enter a brief description of the issue for Gemini AI to analyze.');
+  // Section-Wise Gemma 4 Translation Handler
+  const handleTranslateSection = async (field: 'title' | 'description' | 'address') => {
+    const textToTranslate = field === 'title' ? title : field === 'description' ? description : address;
+    if (!textToTranslate.trim()) return;
+
+    if (field === 'title') setIsTranslatingTitle(true);
+    else if (field === 'description') setIsTranslatingDesc(true);
+    else setIsTranslatingAddress(true);
+
+    try {
+      const res = await fetch('/api/ai/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: textToTranslate,
+          fieldName:
+            field === 'title'
+              ? 'Issue Title'
+              : field === 'description'
+              ? 'Detailed Civic Grievance Description'
+              : 'Location Landmark',
+          languageHint: language,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success && json.englishTranslation) {
+        if (field === 'title') {
+          setTitleEn(json.englishTranslation);
+          setTitleReviewed(false);
+        } else if (field === 'description') {
+          setDescriptionEn(json.englishTranslation);
+          setPolishedDescriptionEn(json.englishTranslation);
+          setDescriptionReviewed(false);
+        } else if (field === 'address') {
+          setAddressEn(json.englishTranslation);
+          setAddressReviewed(false);
+        }
+        playSuccessChime();
+      }
+    } catch (err) {
+      console.error(`Gemma 4 translation error for ${field}:`, err);
+    } finally {
+      if (field === 'title') setIsTranslatingTitle(false);
+      else if (field === 'description') setIsTranslatingDesc(false);
+      else setIsTranslatingAddress(false);
+    }
+  };
+
+  // Master "Translate" Handler: Powered by Gemma 4 + Gemini 3.8 Flash Severity
+  const handleTranslateMaster = async () => {
+    if (!description.trim() && !title.trim()) {
+      setSubmitError(t('descRequired', 'Please enter a brief description of the issue.'));
       return;
     }
 
-    setIsTriaging(true);
+    setIsTranslatingAll(true);
     setTriageSuccess(false);
+    setSubmitError(null);
 
     try {
-      // Trigger photo verifications in background if attached
+      // 1. Trigger photo verifications in background if attached
       if (photos.length > 0) {
         photos.forEach((_, idx) => {
           if (!photoVerifications[idx]) {
@@ -321,33 +641,96 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         });
       }
 
-      const res = await fetch('/api/gemini/triage', {
+      // 2. Structured Gemma 4 Translation for Title & Description
+      let translatedTitle = titleEn;
+      let translatedDesc = descriptionEn;
+
+      const translateRes = await fetch('/api/ai/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: `${title} - ${description}`,
+          title: title.trim(),
+          description: description.trim(),
+          languageHint: language,
+        }),
+      });
+
+      const translateJson = await translateRes.json();
+      if (translateJson.success) {
+        if (translateJson.englishTitle) {
+          translatedTitle = translateJson.englishTitle;
+          setTitleEn(translateJson.englishTitle);
+          setTitleReviewed(false);
+        }
+        if (translateJson.englishDescription) {
+          translatedDesc = translateJson.englishDescription;
+          setDescriptionEn(translateJson.englishDescription);
+          setPolishedDescriptionEn(translateJson.englishDescription);
+          setDescriptionReviewed(false);
+        }
+        setIsTranslationOutdated(false);
+      }
+
+      // 3. Translate Location / Address if present
+      if (address.trim()) {
+        const addrRes = await fetch('/api/ai/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: address,
+            fieldName: 'Location Landmark',
+            languageHint: language,
+          }),
+        });
+        const addrJson = await addrRes.json();
+        if (addrJson.success && addrJson.englishTranslation) {
+          setAddressEn(addrJson.englishTranslation);
+          setAddressReviewed(false);
+        }
+      }
+
+      // 4. Civic Issue Severity Assessment via Gemini 3.8 Flash
+      // Pass the translated English text to ensure municipal triage has accurate English context
+      const sevRes = await fetch('/api/reports/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: translatedTitle || title.trim(),
+          description: translatedDesc || description.trim(),
+          manualCategory: userHasManuallySelectedCategory ? category : null,
           imageBase64: primaryPhotoUrl.startsWith('data:') ? primaryPhotoUrl : undefined,
         }),
       });
 
-      const json = await res.json();
+      const json = await sevRes.json();
       if (json.success && json.data) {
         const d = json.data;
-        if (d.title) setTitle(d.title);
-        if (d.category) setCategory(d.category as CivicCategoryType);
-        if (d.priority) setPriority(d.priority as PriorityLevel);
-        if (d.severity_score) setSeverityScore(d.severity_score);
+        // Never overwrite title with original text or description slice; only set titleEn if still missing
+        if (!title.trim() && !titleEn && !translateJson?.englishTitle && d.suggested_title) {
+          setTitleEn(d.suggested_title);
+        }
+        if (d.severity_index !== undefined) {
+          setSeverityIndex(d.severity_index);
+          setSeverityScore(Math.round(d.severity_index / 10) || 5);
+        }
         if (d.severity_label) setSeverityLabel(d.severity_label);
+        if (d.severity_confidence !== undefined) setSeverityConfidence(d.severity_confidence);
+        if (d.severity_explanation) setSeverityExplanation(d.severity_explanation);
+        if (d.is_insufficient_info !== undefined) setIsInsufficientInfo(d.is_insufficient_info);
+        if (d.ai_detected_category) setAiDetectedCategory(d.ai_detected_category as CivicCategoryType);
+        if (d.final_category && !userHasManuallySelectedCategory) setCategory(d.final_category as CivicCategoryType);
+        if (d.category_explanation) setCategoryExplanation(d.category_explanation);
         if (d.department) setDepartment(d.department);
-        if (d.estimated_sla_hours) setSlaHours(d.estimated_sla_hours);
+        if (d.sla_hours) setSlaHours(d.sla_hours);
         if (d.safety_hazards) setSafetyHazards(d.safety_hazards);
-        if (d.administrative_summary) setAdminSummary(d.administrative_summary);
         setTriageSuccess(true);
       }
+
+      playSuccessChime();
     } catch (err) {
-      console.error('Triage error:', err);
+      console.error('Translation & Severity analysis error:', err);
     } finally {
-      setIsTriaging(false);
+      setIsTranslatingAll(false);
     }
   };
 
@@ -501,7 +884,14 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   // Handle Preset Sample Selection (Loads 2 genuine JPG photos for selected category)
   const handleSelectPreset = async (preset: (typeof PRESET_SAMPLE_PHOTOS)[0]) => {
     setDescription(preset.desc);
+    setTitleEn('');
+    setDescriptionEn('');
+    setPolishedDescriptionEn('');
+    setTitleReviewed(false);
+    setDescriptionReviewed(false);
+    setIsTranslationOutdated(false);
     setCategory(preset.category as CivicCategoryType);
+    setUserHasManuallySelectedCategory(true);
     const matched = getCategoryById(preset.category as CivicCategoryType);
     setDepartment(matched.typicalDepartment);
     setSlaHours(matched.defaultSlaHours);
@@ -527,14 +917,22 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      alert('Please specify an issue title or run AI Triage.');
+      setSubmitError(t('titleRequired', 'Please specify an issue title.'));
+      return;
+    }
+
+    if (!description.trim()) {
+      setSubmitError(t('descRequired', 'Please enter a description of the civic grievance.'));
       return;
     }
 
     // Strict Enforcement of Minimum 2 and Maximum 3 Photos
     if (photos.length < 2) {
       setPhotoError(
-        `Minimum 2 photos required before submission (currently ${photos.length} of 3 attached). Please take or upload at least 2 photos.`
+        t(
+          'photoUploadMinWarning',
+          `Minimum 2 photos required before submission (currently ${photos.length} of 3 attached). Please take or upload at least 2 photos.`
+        )
       );
       return;
     }
@@ -544,21 +942,62 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       return;
     }
 
+    // Outdated translation guard: Ensure English translation is in sync with latest edits
+    if (isTranslationOutdated) {
+      setSubmitError(
+        'The original title or description was edited after translation. Please click "Translate" to regenerate the official English translation before submitting.'
+      );
+      return;
+    }
+
+    // Non-Negotiable Requirement 12: Ensure every required free-text field has been translated into English and reviewed
+    if (!titleEn.trim() || !descriptionEn.trim()) {
+      setSubmitError(
+        t(
+          'reviewPendingWarning',
+          'Please click "Translate" to generate the official English translation with Gemma 4 and confirm your review before submitting.'
+        )
+      );
+      return;
+    }
+
+    if (!titleReviewed || !descriptionReviewed) {
+      setSubmitError(
+        t(
+          'reviewPendingWarning',
+          'Please review and check the confirmation box for both the Title and Description English translations before submitting.'
+        )
+      );
+      return;
+    }
+
     setSubmitting(true);
     setUploadProgress(null);
     setSubmitError(null);
 
     try {
       const primaryVerification = photoVerifications[0] || photoVerifications[1] || undefined;
+      const finalReportDescription = descriptionEn.trim() || description.trim();
+      const finalReportTitle = titleEn.trim() || title.trim();
+
       await onSubmitReport(
         {
-          title,
-          description: description || 'Civic infrastructure defect requiring immediate municipal remediation.',
-          category,
+          title: finalReportTitle,
+          description: finalReportDescription,
+          original_description: description.trim(),
+          polished_description_en: descriptionEn.trim(),
+          category, // Authoritative final category
+          manual_category: userHasManuallySelectedCategory ? category : null,
+          ai_detected_category: aiDetectedCategory || category,
+          final_category: category,
           status: 'Reported',
           priority,
           severity_score: severityScore,
           severity_label: severityLabel,
+          severity_index: severityIndex,
+          severity_confidence: severityConfidence,
+          severity_explanation: severityExplanation,
+          is_insufficient_info: isInsufficientInfo,
           department,
           sla_hours: slaHours,
           imageUrl: primaryPhotoUrl || undefined,
@@ -567,19 +1006,35 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           longitude,
           accuracy: 8,
           address,
-          location_name: address,
+          location_name: addressEn.trim() || address,
           reportedBy: user?.displayName || user?.email || citizenEmail || 'Citizen Sentinel',
           authorUid: user?.uid,
           isUserSubmitted: true,
           safety_hazards: safetyHazards,
           administrative_summary: adminSummary,
           verificationResult: primaryVerification,
+
+          // Separate preservation of original and reviewed English translation (Requirements 11 & 12)
+          originalText: {
+            title: title.trim(),
+            description: description.trim(),
+            address: address.trim(),
+          },
+          originalLanguage: language,
+          englishTranslation: {
+            title: titleEn.trim(),
+            description: descriptionEn.trim(),
+            address: addressEn.trim() || address.trim(),
+          },
+          translationReviewed: Boolean(titleReviewed && descriptionReviewed),
+          gemmaModelUsed: 'gemma-4-26b-a4b-it',
         },
         photos,
         (progressMessage: string) => {
           setUploadProgress(progressMessage);
         }
       );
+      handleDiscardRetainedAudio();
       onClose();
     } catch (err: any) {
       console.error('Submit report error:', err);
@@ -608,18 +1063,21 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             </div>
             <div>
               <h3 className="font-extrabold text-lg sm:text-xl text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-                Report Civic Issue
+                {t('reportModalTitle', 'Report Civic Issue')}
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300/40">
                   AI-Powered
                 </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Direct dispatch to Municipal Corporation, PWD, Jal Board & DISCOMs
+                {t('reportModalSubtitle', 'Direct dispatch to Municipal Corporation, PWD, Jal Board & DISCOMs')}
               </p>
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              handleDiscardRetainedAudio();
+              onClose();
+            }}
             disabled={submitting}
             className="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
             title={submitting ? 'Please wait while grievance is uploading' : 'Close'}
@@ -630,81 +1088,352 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
-          {/* Step 1: Citizen Description with Voice & AI Triage */}
+          {/* 1. Issue Title with Gemma 4 Section-Wise Translation */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                1. What is the issue? (Describe or Speak)
+                1. {t('reportTitleLabel', 'Issue Title')}
+              </label>
+              <button
+                type="button"
+                onClick={() => handleTranslateSection('title')}
+                disabled={isTranslatingTitle || !title.trim()}
+                className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer disabled:opacity-40"
+              >
+                {isTranslatingTitle ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                )}
+                <span>{isTranslatingTitle ? t('translatingGemma', 'Translating...') : t('btnTranslate', 'Translate')}</span>
+              </button>
+            </div>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (titleEn) {
+                  setIsTranslationOutdated(true);
+                  setTitleReviewed(false);
+                }
+              }}
+              placeholder={t('reportTitlePlaceholder', 'e.g. Hazardous deep pothole on arterial road')}
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 text-slate-900 dark:text-white placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+
+            {/* Gemma 4 Title Translation & Review Card */}
+            {titleEn && (
+              <div className="mt-2.5 p-3 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-slate-50 to-indigo-50/50 dark:from-slate-950 dark:via-indigo-950/20 dark:to-slate-950 border border-indigo-200/80 dark:border-indigo-900/60 space-y-2 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 dark:bg-slate-800 border border-indigo-500/40 text-white shadow-xs">
+                    <img
+                      src="/gemma-logo.svg"
+                      alt="Gemma 4 Logo"
+                      className="w-3.5 h-3.5 rounded-sm object-contain"
+                    />
+                    <span className="text-[10px] font-bold tracking-wide text-indigo-300">
+                      {t('poweredByGemma4', 'Powered by Gemma 4')}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                    {t('englishTranslationLabel', 'English Translation (for Municipal Authority)')}
+                  </span>
+                </div>
+
+                <input
+                  type="text"
+                  value={titleEn}
+                  onChange={(e) => {
+                    setTitleEn(e.target.value);
+                    setTitleReviewed(false); // Force re-review confirmation if modified
+                  }}
+                  className="w-full px-3.5 py-2 rounded-xl border border-indigo-300 dark:border-indigo-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer pt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={titleReviewed}
+                    onChange={(e) => setTitleReviewed(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 dark:border-slate-700 cursor-pointer"
+                  />
+                  <span className={titleReviewed ? 'text-emerald-700 dark:text-emerald-400 font-bold' : ''}>
+                    {t('reviewCheckbox', 'I have reviewed this English translation for accuracy')}
+                  </span>
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* 2. Citizen Description with Gemini 3.5 Transcribe & Gemma 4 Translation */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                2. {t('reportDescriptionLabel', 'Detailed Description & Civic Hazard')}
               </label>
               <div className="flex items-center gap-2">
+                {/* Voice Input with Gemini 3.5 Transcribe */}
                 <button
                   type="button"
                   onClick={toggleVoiceRecording}
+                  disabled={isTranscribing}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     isRecording
                       ? 'bg-rose-500 text-white animate-pulse'
+                      : isTranscribing
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
-                  title="Speak in Hindi / English / Regional Language"
+                  title="Speak in your preferred language (Gemini 3.5 Transcribe)"
                 >
-                  {isRecording ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-emerald-600" />}
-                  <span>{isRecording ? 'Listening...' : 'Voice Input'}</span>
+                  {isRecording ? (
+                    <MicOff className="w-3.5 h-3.5" />
+                  ) : isTranscribing ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                  ) : (
+                    <Mic className="w-3.5 h-3.5 text-emerald-600" />
+                  )}
+                  <span>
+                    {isRecording
+                      ? t('recordingVoice', 'Listening...')
+                      : isTranscribing
+                      ? t('transcribingVoice', 'Transcribing...')
+                      : t('voiceInput', 'Voice Input')}
+                  </span>
                 </button>
+
+                {/* Primary Button strictly labelled "Translate" per non-negotiable requirement 4 */}
                 <button
                   type="button"
-                  onClick={handleAiTriage}
-                  disabled={isTriaging || (!description && !title)}
+                  onClick={handleTranslateMaster}
+                  disabled={isTranslatingAll || (!description.trim() && !title.trim())}
                   className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50 transition-all cursor-pointer"
+                  title="Translate free-text sections to English via Gemma 4"
                 >
-                  {isTriaging ? (
+                  {isTranslatingAll ? (
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
                   )}
-                  <span>{isTriaging ? 'Gemini Analyzing...' : 'AI Auto-Triage'}</span>
+                  <span>
+                    {isTranslatingAll
+                      ? t('translatingGemma', 'Translating with Gemma 4...')
+                      : t('btnTranslate', 'Translate')}
+                  </span>
                 </button>
+                {isTranslationOutdated && (
+                  <span className="text-[10px] text-amber-700 dark:text-amber-300 font-bold flex items-center gap-1 bg-amber-100 dark:bg-amber-950/80 px-2 py-0.5 rounded-md border border-amber-300 dark:border-amber-800 animate-pulse">
+                    <AlertTriangle className="w-3 h-3" />
+                    <span>Re-translate needed</span>
+                  </span>
+                )}
               </div>
             </div>
 
             <textarea
               rows={3}
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g., There is a dangerous pothole right in front of the metro station pillar 142. Motorcyclists are slipping and it gets filled with dirty water during rain..."
+              onChange={(e) => {
+                setDescription(e.target.value);
+                userEditedDuringTranscriptionRef.current = true;
+                if (descriptionEn) {
+                  setIsTranslationOutdated(true);
+                  setDescriptionReviewed(false);
+                }
+              }}
+              placeholder={t(
+                'reportDescPlaceholder',
+                'Describe in your preferred language (Hindi, Punjabi, Kannada, Bengali, Marathi, or English)...'
+              )}
               className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 text-slate-900 dark:text-white placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
             />
 
-            {triageSuccess && (
-              <div className="mt-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-start gap-2.5 text-xs text-emerald-800 dark:text-emerald-300 animate-in fade-in duration-300">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <span className="font-bold">AI Diagnosis Complete:</span> Classified as{' '}
-                  <span className="font-bold underline">{category.replace('_', ' ')}</span> &bull; Routed to{' '}
-                  <span className="font-bold">{department}</span> &bull; Estimated SLA: <b>{slaHours} hrs</b>.
+            {/* Voice Audio Retention & Error Recovery Bar */}
+            {(hasRetainedAudio || transcriptionError || isTranscribing) && (
+              <div className="mt-2 p-2.5 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-2.5 transition-all bg-slate-50 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div
+                    className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                      transcriptionError
+                        ? 'bg-rose-100 dark:bg-rose-950 text-rose-600'
+                        : isTranscribing
+                        ? 'bg-amber-100 dark:bg-amber-950 text-amber-600 animate-spin'
+                        : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600'
+                    }`}
+                  >
+                    {transcriptionError ? (
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                    ) : isTranscribing ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Mic className="w-3.5 h-3.5" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {transcriptionError
+                        ? transcriptionError
+                        : isTranscribing
+                        ? 'Gemini 3.5 Transcribe converting speech to text...'
+                        : `Voice audio retained in session memory (${retainedDurationSec}s)`}
+                    </p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      {transcriptionError
+                        ? 'Audio safely held in memory. You can retry transcription without recording again.'
+                        : 'Stored exclusively in session memory. Discarded automatically upon submission or exit.'}
+                    </p>
+                  </div>
                 </div>
+
+                <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                  {hasRetainedAudio && !isTranscribing && (
+                    <button
+                      type="button"
+                      onClick={handleRetryTranscription}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                      title="Retry speech transcription using retained audio"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Retry</span>
+                    </button>
+                  )}
+                  {hasRetainedAudio && !isTranscribing && (
+                    <button
+                      type="button"
+                      onClick={handleDiscardRetainedAudio}
+                      className="px-2 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-[11px] transition-colors cursor-pointer"
+                      title="Discard retained voice audio from memory"
+                    >
+                      <span>Discard</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Gemma 4 Description Translation & Review Card */}
+            {descriptionEn && (
+              <div className="mt-2.5 p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-slate-50 to-indigo-50/50 dark:from-slate-950 dark:via-indigo-950/20 dark:to-slate-950 border border-indigo-200/80 dark:border-indigo-900/60 space-y-2.5 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 dark:bg-slate-800 border border-indigo-500/40 text-white shadow-xs">
+                    <img
+                      src="/gemma-logo.svg"
+                      alt="Gemma 4 Logo"
+                      className="w-3.5 h-3.5 rounded-sm object-contain"
+                    />
+                    <span className="text-[10px] font-bold tracking-wide text-indigo-300">
+                      {t('poweredByGemma4', 'Powered by Gemma 4')}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                    {t('englishTranslationLabel', 'English Translation (for Municipal Authority)')}
+                  </span>
+                </div>
+
+                <textarea
+                  rows={3}
+                  value={descriptionEn}
+                  onChange={(e) => {
+                    setDescriptionEn(e.target.value);
+                    setPolishedDescriptionEn(e.target.value);
+                    setDescriptionReviewed(false); // Force re-review confirmation if modified
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-indigo-300 dark:border-indigo-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={descriptionReviewed}
+                      onChange={(e) => setDescriptionReviewed(e.target.checked)}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 dark:border-slate-700 cursor-pointer"
+                    />
+                    <span className={descriptionReviewed ? 'text-emerald-700 dark:text-emerald-400 font-bold' : ''}>
+                      {t('reviewCheckbox', 'I have reviewed this English translation for accuracy')}
+                    </span>
+                  </label>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Preserved landmarks & factual details</span>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Severity Assessment via Gemini 3.8 Flash */}
+            {triageSuccess && (
+              <div className="mt-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Severity Index:
+                    </span>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                        severityIndex >= 75
+                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                          : severityIndex >= 50
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                          : severityIndex >= 25
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
+                          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                      }`}
+                    >
+                      {severityLabel} ({severityIndex}/100)
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                    Confidence: {(severityConfidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+
+                {/* Severity Progress Bar */}
+                <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      severityIndex >= 75
+                        ? 'bg-rose-500'
+                        : severityIndex >= 50
+                        ? 'bg-amber-500'
+                        : severityIndex >= 25
+                        ? 'bg-blue-500'
+                        : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${Math.max(5, severityIndex)}%` }}
+                  />
+                </div>
+
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  {severityExplanation}
+                </p>
+
+                {isInsufficientInfo && (
+                  <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                    <span>⚠️</span>
+                    <span>Description is brief. Additional landmark details recommended for higher confidence.</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Issue Title */}
+          {/* Category Selector Grid (Priority 3: Manual Precedence Guaranteed) */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-              Issue Title
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Hazardous deep pothole on arterial road"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 text-slate-900 dark:text-white placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                2. Category & Department Routing
+              </label>
+              {aiDetectedCategory && (
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  {userHasManuallySelectedCategory
+                    ? 'Manual category prioritized ✓'
+                    : 'AI recommended category applied ✨'}
+                </span>
+              )}
+            </div>
 
-          {/* Category Selector Grid */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-              2. Category & Department Routing
-            </label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {CIVIC_CATEGORIES.map((cat) => {
                 const isSelected = category === cat.id;
@@ -713,6 +1442,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                     key={cat.id}
                     type="button"
                     onClick={() => {
+                      setUserHasManuallySelectedCategory(true);
                       setCategory(cat.id);
                       setDepartment(cat.typicalDepartment);
                       setSlaHours(cat.defaultSlaHours);
@@ -725,7 +1455,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   >
                     <span className="text-xl mb-1">{cat.icon}</span>
                     <span className="font-bold text-xs text-slate-900 dark:text-white leading-tight">
-                      {cat.label}
+                      {getCatLabel(cat.id, cat.label)}
                     </span>
                     <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
                       SLA: {cat.defaultSlaHours}h
@@ -734,6 +1464,29 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 );
               })}
             </div>
+
+            {/* Category Precedence Explanation Banner */}
+            {aiDetectedCategory && (
+              <div className="mt-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 shrink-0">Status:</span>
+                  {userHasManuallySelectedCategory ? (
+                    <span className="text-emerald-700 dark:text-emerald-300 font-semibold truncate">
+                      Citizen manual selection ({category.replace('_', ' ')}) is authoritative.
+                    </span>
+                  ) : (
+                    <span className="text-blue-700 dark:text-blue-300 font-semibold truncate">
+                      AI recommendation ({category.replace('_', ' ')}) selected by default.
+                    </span>
+                  )}
+                </div>
+                {userHasManuallySelectedCategory && aiDetectedCategory !== category && (
+                  <span className="text-[10px] font-mono text-slate-400 shrink-0 ml-2">
+                    (AI suggested: {aiDetectedCategory.replace('_', ' ')})
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 3. Photo Evidence Section (Exclusively inside Report an Issue) */}
@@ -1472,23 +2225,40 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                4. Location & Municipal Ward
+                4. {t('reportLocationLabel', 'Location & Municipal Ward')}
               </label>
-              <button
-                type="button"
-                onClick={handleDetectGPS}
-                className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-              >
-                <MapPin className="w-3.5 h-3.5" />
-                <span>Auto-Detect GPS</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDetectGPS}
+                  className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>{t('useGps', 'Auto-Detect GPS')}</span>
+                </button>
+                {address.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => handleTranslateSection('address')}
+                    disabled={isTranslatingAddress}
+                    className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer disabled:opacity-40"
+                  >
+                    {isTranslatingAddress ? (
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3 h-3" />
+                    )}
+                    <span>{t('btnTranslate', 'Translate')}</span>
+                  </button>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="Street address or landmark"
+                placeholder={t('reportLocationLabel', 'Street address or landmark')}
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 text-slate-900 dark:text-white placeholder:text-slate-400 text-xs focus:ring-2 focus:ring-emerald-500"
               />
               <input
@@ -1499,6 +2269,26 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 text-slate-900 dark:text-white placeholder:text-slate-400 text-xs focus:ring-2 focus:ring-emerald-500"
               />
             </div>
+            {addressEn && (
+              <div className="mt-2 p-2.5 rounded-xl bg-indigo-50/60 dark:bg-slate-950 border border-indigo-200 dark:border-indigo-900/50 flex items-center justify-between text-xs animate-in fade-in">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-900 text-white text-[9px] font-bold">
+                    <img src="/gemma-logo.svg" alt="Gemma 4" className="w-2.5 h-2.5 object-contain" />
+                    <span>Gemma 4</span>
+                  </div>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{addressEn}</span>
+                </div>
+                <label className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer shrink-0 ml-2">
+                  <input
+                    type="checkbox"
+                    checked={addressReviewed}
+                    onChange={(e) => setAddressReviewed(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>Reviewed</span>
+                </label>
+              </div>
+            )}
           </div>
 
           {/* 5. Citizen Verification & Accountability */}
@@ -1670,7 +2460,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               disabled={submitting}
               className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 cursor-pointer"
             >
-              Cancel
+              {t('btnCancel', 'Cancel')}
             </button>
             <button
               type="submit"

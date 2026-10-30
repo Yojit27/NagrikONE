@@ -104,9 +104,9 @@ export const CivicMap: React.FC<CivicMapProps> = ({
   onPickLocation,
   isPickMode = false,
 }) => {
-  // Google Maps API Key from environment
+  // Google Maps API Key from environment with hosted platform fallback
   const googleMapsApiKey =
-    (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string) || '';
+    (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string) || 'AIzaSyCAtcQPH9HpK6btw9f0xQ9x-yZWby3hc8Y';
 
   // State Management
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('all');

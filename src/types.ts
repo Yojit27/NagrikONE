@@ -100,9 +100,58 @@ export interface CivicReport {
   safety_hazards?: string[];
   administrative_summary?: string;
   timeline: TimelineEvent[];
+  commentsCount?: number;
   official_response?: string;
   verificationResult?: ImageVerificationResult;
   escalationLadder?: EscalationLadderState;
+
+  // AI Report Enhancement & Triaging (Priorities 1, 2, 3)
+  original_description?: string;
+  polished_description_en?: string;
+  severity_index?: number; // 0-100 scale
+  severity_confidence?: number; // 0.0 - 1.0
+  severity_explanation?: string;
+  is_insufficient_info?: boolean;
+  manual_category?: CivicCategoryType | string | null;
+  ai_detected_category?: CivicCategoryType | string;
+  final_category?: CivicCategoryType;
+  category_confidence?: number;
+  category_explanation?: string;
+
+  // Gemma 4 Section-Wise Multilingual Translation & Citizen Review
+  originalText?: {
+    title?: string;
+    description?: string;
+    address?: string;
+  };
+  originalLanguage?: string;
+  englishTranslation?: {
+    title?: string;
+    description?: string;
+    address?: string;
+  };
+  translationReviewed?: boolean;
+  gemmaModelUsed?: string;
+}
+
+export interface AiReportAnalysisResult {
+  original_description: string;
+  polished_description_en: string;
+  severity_index: number;
+  severity_label: 'Low' | 'Moderate' | 'High' | 'Critical';
+  severity_confidence: number;
+  severity_explanation: string;
+  is_insufficient_info: boolean;
+  manual_category: CivicCategoryType | string | null;
+  ai_detected_category: CivicCategoryType;
+  final_category: CivicCategoryType;
+  category_confidence: number;
+  category_explanation: string;
+  suggested_title?: string;
+  department?: string;
+  sla_hours?: number;
+  safety_hazards?: string[];
+  selection_source?: 'manual' | 'ai_detected' | 'fallback';
 }
 
 export interface CivicBadge {

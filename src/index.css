@@ -3,10 +3,172 @@
 
 @custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 
+@theme {
+  --color-surface: #0f131c;
+  --color-surface-dim: #0f131c;
+  --color-surface-bright: #353943;
+  --color-surface-container-lowest: #0a0e17;
+  --color-surface-container-low: #181b25;
+  --color-surface-container: #1c1f29;
+  --color-surface-container-high: #262a34;
+  --color-surface-container-highest: #31353f;
+  --color-on-surface: #dfe2ef;
+  --color-on-surface-variant: #bacbbe;
+  --color-primary: #6dffba;
+  --color-primary-container: #00e599;
+  --color-on-primary-container: #00613e;
+  --color-secondary: #4edea3;
+  --color-secondary-container: #00a572;
+  --color-on-secondary-container: #00311f;
+  --color-tertiary: #d3e9f0;
+  --color-outline: #849589;
+  --color-outline-variant: #3b4a41;
+}
+
 @layer base {
   body {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-family: 'Plus Jakarta Sans', 'Inter', 'Noto Sans Devanagari', 'Noto Sans Gurmukhi', 'Noto Sans Kannada', 'Noto Sans Bengali', system-ui, -apple-system, sans-serif;
   }
+}
+
+/* Senior Comfort - Light Theme */
+[data-theme="senior-light"] {
+  --bg-primary: #FAF7F2;
+  --bg-surface: #FFFFFF;
+  --bg-surface-soft: #F5EFE6;
+  --border-color: #E2D9CC;
+  --text-primary: #0F172A;
+  --text-secondary: #334155;
+  --action-primary: #0D7653;
+  --action-primary-hover: #0A5C40;
+}
+
+[data-theme="senior-light"] body,
+[data-theme="senior-light"] #app-root {
+  background-color: #FAF7F2 !important;
+  color: #0F172A !important;
+  font-size: 1.03rem;
+  line-height: 1.65;
+}
+
+[data-theme="senior-light"] .bg-white,
+[data-theme="senior-light"] .dark\:bg-\[\#181b25\],
+[data-theme="senior-light"] .dark\:bg-\[\#1c1f29\],
+[data-theme="senior-light"] .dark\:bg-slate-900 {
+  background-color: #FFFFFF !important;
+  border-color: #E2D9CC !important;
+  color: #0F172A !important;
+}
+
+[data-theme="senior-light"] .text-slate-900,
+[data-theme="senior-light"] .dark\:text-white {
+  color: #0F172A !important;
+}
+
+[data-theme="senior-light"] .text-slate-500,
+[data-theme="senior-light"] .text-slate-400,
+[data-theme="senior-light"] .dark\:text-\[\#bacbbe\],
+[data-theme="senior-light"] .dark\:text-slate-400 {
+  color: #334155 !important;
+}
+
+/* Senior Comfort - Dark Theme */
+[data-theme="senior-dark"] {
+  --bg-primary: #111622;
+  --bg-surface: #1A2232;
+  --bg-surface-soft: #232D40;
+  --border-color: #2D3B52;
+  --text-primary: #F8FAFC;
+  --text-secondary: #CBD5E1;
+  --action-primary: #10B981;
+}
+
+[data-theme="senior-dark"] body,
+[data-theme="senior-dark"] #app-root {
+  background-color: #111622 !important;
+  color: #F8FAFC !important;
+  font-size: 1.03rem;
+  line-height: 1.65;
+}
+
+[data-theme="senior-dark"] .bg-white,
+[data-theme="senior-dark"] .dark\:bg-\[\#181b25\],
+[data-theme="senior-dark"] .dark\:bg-\[\#1c1f29\],
+[data-theme="senior-dark"] .dark\:bg-slate-900 {
+  background-color: #1A2232 !important;
+  border-color: #2D3B52 !important;
+  color: #F8FAFC !important;
+}
+
+[data-theme="senior-dark"] .text-slate-500,
+[data-theme="senior-dark"] .text-slate-400,
+[data-theme="senior-dark"] .dark\:text-\[\#bacbbe\],
+[data-theme="senior-dark"] .dark\:text-slate-400 {
+  color: #CBD5E1 !important;
+}
+
+/* High Contrast Accessibility Theme */
+[data-theme="high-contrast"] body,
+[data-theme="high-contrast"] #app-root {
+  background-color: #FFFFFF !important;
+  color: #000000 !important;
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+[data-theme="high-contrast"] * {
+  border-color: #000000 !important;
+}
+
+[data-theme="high-contrast"] .bg-white,
+[data-theme="high-contrast"] .dark\:bg-\[\#181b25\],
+[data-theme="high-contrast"] .dark\:bg-\[\#1c1f29\],
+[data-theme="high-contrast"] .dark\:bg-slate-900 {
+  background-color: #FFFFFF !important;
+  border: 2px solid #000000 !important;
+  color: #000000 !important;
+}
+
+[data-theme="high-contrast"] .text-slate-900,
+[data-theme="high-contrast"] .dark\:text-white,
+[data-theme="high-contrast"] .text-slate-500,
+[data-theme="high-contrast"] .text-slate-400,
+[data-theme="high-contrast"] .dark\:text-\[\#bacbbe\],
+[data-theme="high-contrast"] .dark\:text-slate-400 {
+  color: #000000 !important;
+  font-weight: 600;
+}
+
+[data-theme="high-contrast"] button:focus-visible,
+[data-theme="high-contrast"] a:focus-visible,
+[data-theme="high-contrast"] input:focus-visible,
+[data-theme="high-contrast"] select:focus-visible {
+  outline: 3px solid #000000 !important;
+  outline-offset: 2px !important;
+}
+
+/* Minimum 44px touch targets on mobile for senior comfort */
+[data-theme="senior-light"] button,
+[data-theme="senior-dark"] button,
+[data-theme="high-contrast"] button {
+  min-height: 44px;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 .font-serif-instrument {

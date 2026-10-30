@@ -23,13 +23,17 @@ import { SocialTaggingModal } from './components/SocialTaggingModal';
 import { RtiGeneratorModal } from './components/RtiGeneratorModal';
 import { LegalCounselModal } from './components/LegalCounselModal';
 import { ProfileModal } from './components/ProfileModal';
+import { ProfileView } from './components/ProfileView';
+import { AboutView } from './components/AboutView';
 import { Footer } from './components/Footer';
 import { ProcedureView } from './components/ProcedureView';
 import { AuthScreen } from './components/AuthScreen';
+import { OnboardingFlow } from './components/OnboardingFlow';
 import { X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { playThemeToggleSound, playSuccessChime, playBadgeUnlockSound } from './utils/audio';
 import { useAuth } from './context/AuthContext.tsx';
+import { useLanguageTheme } from './context/LanguageThemeContext';
 import {
   submitReportWithFirebase,
   subscribeToFirestoreReports,
@@ -87,6 +91,13 @@ const INITIAL_NOTIFICATIONS: CivicNotification[] = [
 
 export default function App() {
   const { user, idToken, dbUser, loading: authLoading, isEmailVerified } = useAuth();
+  const {
+    showOnboarding,
+    closeOnboarding,
+    theme,
+    setTheme,
+    isThemeDark,
+  } = useLanguageTheme();
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | null>(null);
   const [isGuestBrowsing, setIsGuestBrowsing] = useState<boolean>(() => {
     try {
@@ -235,6 +246,9 @@ export default function App() {
   // Dark/Light Theme state
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
+      const savedTheme = localStorage.getItem('nagrikone_theme_variant');
+      if (savedTheme === 'senior-dark') return true;
+      if (savedTheme === 'senior-light') return false;
       const saved = localStorage.getItem('nagrikone_theme');
       if (saved) return saved === 'dark';
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -243,18 +257,21 @@ export default function App() {
     }
   });
 
-  // Sync theme with DOM
+  // Keep isDarkMode in sync with active theme
+  useEffect(() => {
+    setIsDarkMode(isThemeDark);
+  }, [isThemeDark]);
+
+  // Sync theme with DOM while preserving active data-theme attribute
   useEffect(() => {
     const root = document.documentElement;
     if (isDarkMode) {
       root.classList.add('dark');
-      root.setAttribute('data-theme', 'dark');
       root.style.colorScheme = 'dark';
       document.body.classList.add('dark');
       localStorage.setItem('nagrikone_theme', 'dark');
     } else {
       root.classList.remove('dark');
-      root.setAttribute('data-theme', 'light');
       root.style.colorScheme = 'light';
       document.body.classList.remove('dark');
       localStorage.setItem('nagrikone_theme', 'light');
@@ -812,11 +829,21 @@ export default function App() {
   };
 
   const handleToggleTheme = () => {
-    setIsDarkMode((prev) => {
-      const next = !prev;
-      playThemeToggleSound(next);
-      return next;
-    });
+    if (theme === 'senior-light') {
+      setTheme('senior-dark');
+      setIsDarkMode(true);
+      playThemeToggleSound(true);
+    } else if (theme === 'senior-dark') {
+      setTheme('senior-light');
+      setIsDarkMode(false);
+      playThemeToggleSound(false);
+    } else {
+      setIsDarkMode((prev) => {
+        const next = !prev;
+        playThemeToggleSound(next);
+        return next;
+      });
+    }
   };
 
   // Splash loading screen while checking Firebase Auth session
@@ -999,6 +1026,25 @@ export default function App() {
 
         {currentTab === 'analytics' && <AnalyticsView reports={reports} />}
 
+        {currentTab === 'about' && (
+          <AboutView
+            onReturnHome={() => setCurrentTab('home')}
+            onOpenProfile={() => setCurrentTab('profile')}
+            onOpenProcedure={() => setCurrentTab('procedure')}
+          />
+        )}
+
+        {currentTab === 'profile' && (
+          <ProfileView
+            profile={profile}
+            reports={reports}
+            onOpenReportDetail={(rep) => setActiveDetailReport(rep)}
+            onOpenAuth={(mode) => setAuthModalMode(mode)}
+            onUpdateProfile={(updated) => setProfile((prev) => ({ ...prev, ...updated }))}
+            onReturnHome={() => setCurrentTab('home')}
+          />
+        )}
+
         {currentTab === 'procedure' && (
           <ProcedureView
             reports={reports}
@@ -1023,6 +1069,7 @@ export default function App() {
         onSelectTab={setCurrentTab}
         onOpenReportModal={handleOpenReportModal}
         unlockedBadgesCount={unlockedBadgesCount}
+        reportsCount={reports.length}
       />
 
       {/* Modals */}
@@ -1130,6 +1177,11 @@ export default function App() {
               karmaPoints: prev.karmaPoints + 100,
             }));
           }}
+          onOpenAuth={(mode) => {
+            setIsProfileModalOpen(false);
+            setAuthModalMode(mode);
+          }}
+          onUpdateProfile={(updated) => setProfile((prev) => ({ ...prev, ...updated }))}
         />
       )}
 
@@ -1155,6 +1207,13 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Post-Login Multilingual & Senior-Friendly Onboarding Flow */}
+      <OnboardingFlow
+        isOpen={showOnboarding}
+        onComplete={closeOnboarding}
+        onCancel={closeOnboarding}
+      />
     </div>
   );
 }

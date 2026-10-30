@@ -2,7 +2,7 @@ import React from 'react';
 import { Instagram, Shield, Heart } from 'lucide-react';
 
 interface FooterProps {
-  onSelectTab?: (tab: 'home' | 'map' | 'sahayak' | 'badges' | 'analytics' | 'procedure') => void;
+  onSelectTab?: (tab: string) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({ onSelectTab }) => {
@@ -11,39 +11,49 @@ export const Footer: React.FC<FooterProps> = ({ onSelectTab }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-28 lg:pb-8 flex flex-col sm:flex-row items-center justify-between gap-4">
         {/* Brand & Mission Statement */}
         <div className="flex items-center gap-3 text-center sm:text-left">
-          <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 p-0.5 flex items-center justify-center shadow-sm shadow-blue-500/10 shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-white dark:bg-[#1a1f2c] border border-slate-200/90 dark:border-slate-800 p-1 flex items-center justify-center shadow-sm shadow-emerald-500/10 shrink-0 overflow-hidden">
             <img
               src="/logo-icon.svg"
-              alt="Nagrik One Official Logo"
+              alt="Nagrik One Logo"
               className="w-full h-full object-contain"
-              referrerPolicy="no-referrer"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = '/logo-icon.png';
+              }}
             />
           </div>
           <div>
             <div className="flex items-center gap-1.5 justify-center sm:justify-start">
               <span className="font-extrabold text-sm tracking-tight text-slate-900 dark:text-white">
-                Nagrik<span className="text-blue-600 dark:text-blue-400">One</span> AI
+                Nagrik<span className="text-emerald-500">One</span> AI
               </span>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/50">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/50">
                 Civic Portal
               </span>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Your City &bull; Your Voice &bull; Our Action &bull; Citizen grievance redressal & municipal accountability.
+              Your City &bull; Your Voice &bull; Our Action &bull; Citizen grievance redressal &amp; municipal accountability.
             </p>
           </div>
         </div>
 
         {/* Social Media & Official Links */}
-        <div className="flex flex-wrap items-center justify-center gap-3">
+        <div className="flex flex-wrap items-center justify-center gap-2.5">
           {onSelectTab && (
-            <button
-              onClick={() => onSelectTab('procedure')}
-              className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              <Shield className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Our Procedure</span>
-            </button>
+            <>
+              <button
+                onClick={() => onSelectTab('about')}
+                className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <span>About &amp; Guidelines</span>
+              </button>
+              <button
+                onClick={() => onSelectTab('procedure')}
+                className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Shield className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Our Procedure</span>
+              </button>
+            </>
           )}
 
           {/* Official Instagram Link */}

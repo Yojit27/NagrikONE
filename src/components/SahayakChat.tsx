@@ -107,7 +107,7 @@ export const SahayakChat: React.FC<SahayakChatProps> = ({
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Speech recognition not available on this device browser.');
+      console.warn('Speech recognition not available on this device browser.');
       return;
     }
 

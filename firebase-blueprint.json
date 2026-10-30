@@ -37,7 +37,18 @@
         "longitude": { "type": "number" },
         "address": { "type": "string", "maxLength": 512 },
         "department": { "type": "string", "maxLength": 128 },
-        "createdAt": { "type": "string", "maxLength": 64 }
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "original_description": { "type": "string", "maxLength": 4096 },
+        "polished_description_en": { "type": "string", "maxLength": 4096 },
+        "severity_index": { "type": "number" },
+        "severity_confidence": { "type": "number" },
+        "severity_explanation": { "type": "string", "maxLength": 1024 },
+        "is_insufficient_info": { "type": "boolean" },
+        "manual_category": { "type": "string", "maxLength": 64 },
+        "ai_detected_category": { "type": "string", "maxLength": 64 },
+        "final_category": { "type": "string", "maxLength": 64 },
+        "category_confidence": { "type": "number" },
+        "category_explanation": { "type": "string", "maxLength": 1024 }
       },
       "required": ["id", "title", "description", "category", "status", "reportedBy"]
     }

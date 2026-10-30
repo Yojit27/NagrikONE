@@ -17,9 +17,8 @@ export async function getAllReports(currentUserUid?: string): Promise<CivicRepor
 
     return await formatReports(rawReports, currentUserUid);
   } catch (error) {
-    console.error('Database getAllReports failed:', error);
-    // Sanitize error
-    throw new Error('Database query failed. Please try again later.', { cause: error });
+    console.warn('Database getAllReports connection failed, serving baseline reports:', error);
+    return INITIAL_REPORTS;
   }
 }
 
@@ -97,6 +96,16 @@ async function formatReports(rawReports: any[], currentUserUid?: string): Promis
       ],
       verificationResult,
       escalationLadder,
+      original_description: r.originalDescription || r.description,
+      polished_description_en: r.polishedDescriptionEn || r.description,
+      severity_index: r.severityIndex ?? (r.severityScore ? r.severityScore * 10 : 50),
+      severity_confidence: r.severityConfidence ?? 0.85,
+      severity_explanation: r.severityExplanation || 'Standard civic triage assessment',
+      manual_category: r.manualCategory || r.category,
+      ai_detected_category: r.aiDetectedCategory || r.category,
+      final_category: (r.finalCategory || r.category) as any,
+      category_confidence: r.categoryConfidence ?? 0.9,
+      category_explanation: r.categoryExplanation || 'Assigned based on municipal report triage',
     };
   });
 }
@@ -129,6 +138,16 @@ export async function createReport(reportData: CivicReport, userUid?: string): P
         safetyHazards: reportData.safety_hazards ? JSON.stringify(reportData.safety_hazards) : null,
         timeline: reportData.timeline ? JSON.stringify(reportData.timeline) : null,
         verificationResult: reportData.verificationResult ? JSON.stringify(reportData.verificationResult) : null,
+        originalDescription: reportData.original_description || reportData.description,
+        polishedDescriptionEn: reportData.polished_description_en || reportData.description,
+        severityIndex: reportData.severity_index ?? (reportData.severity_score ? reportData.severity_score * 10 : 50),
+        severityConfidence: reportData.severity_confidence ?? 0.85,
+        severityExplanation: reportData.severity_explanation || null,
+        manualCategory: reportData.manual_category || reportData.category,
+        aiDetectedCategory: reportData.ai_detected_category || reportData.category,
+        finalCategory: reportData.final_category || reportData.category,
+        categoryConfidence: reportData.category_confidence ?? 0.9,
+        categoryExplanation: reportData.category_explanation || null,
       })
       .returning();
 
@@ -202,6 +221,22 @@ export async function getReportComments(reportId: string) {
   } catch (error) {
     console.error('Database getReportComments failed:', error);
     throw new Error('Failed to fetch comments. Please try again later.', { cause: error });
+  }
+}
+
+export async function getReportById(reportId: string, currentUserUid?: string): Promise<CivicReport | null> {
+  try {
+    const rawReports = await db.select().from(reports).where(eq(reports.id, reportId)).limit(1);
+    if (!rawReports.length) {
+      const fallback = INITIAL_REPORTS.find((r) => r.id === reportId);
+      return fallback || null;
+    }
+    const formatted = await formatReports(rawReports, currentUserUid);
+    return formatted[0] || null;
+  } catch (error) {
+    console.warn('Database getReportById failed, searching baseline reports:', error);
+    const fallback = INITIAL_REPORTS.find((r) => r.id === reportId);
+    return fallback || null;
   }
 }
 

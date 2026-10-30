@@ -233,10 +233,30 @@ export async function saveReportToFirestore(report: CivicReport): Promise<CivicR
     if (report.verificationResult) payload.verificationResult = report.verificationResult;
     if (report.escalationLadder) payload.escalationLadder = report.escalationLadder;
 
+    // AI Report Enhancement & Triaging (Priorities 1, 2, 3)
+    if (report.original_description) payload.original_description = report.original_description;
+    if (report.polished_description_en) payload.polished_description_en = report.polished_description_en;
+    if (report.severity_index !== undefined) payload.severity_index = report.severity_index;
+    if (report.severity_confidence !== undefined) payload.severity_confidence = report.severity_confidence;
+    if (report.severity_explanation) payload.severity_explanation = report.severity_explanation;
+    if (report.is_insufficient_info !== undefined) payload.is_insufficient_info = report.is_insufficient_info;
+    if (report.manual_category) payload.manual_category = report.manual_category;
+    if (report.ai_detected_category) payload.ai_detected_category = report.ai_detected_category;
+    if (report.final_category) payload.final_category = report.final_category;
+    if (report.category_confidence !== undefined) payload.category_confidence = report.category_confidence;
+    if (report.category_explanation) payload.category_explanation = report.category_explanation;
+
+    // Gemma 4 Multilingual Translation & Citizen Review
+    if (report.originalText) payload.originalText = report.originalText;
+    if (report.originalLanguage) payload.originalLanguage = report.originalLanguage;
+    if (report.englishTranslation) payload.englishTranslation = report.englishTranslation;
+    if (report.translationReviewed !== undefined) payload.translationReviewed = report.translationReviewed;
+    if (report.gemmaModelUsed) payload.gemmaModelUsed = report.gemmaModelUsed;
+
     await setDoc(reportRef, payload, { merge: true });
     return { ...report, ...payload };
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, path);
+    handleFirestoreError(err, OperationType.WRITE, `reports/${report.id}`);
     throw err;
   }
 }
@@ -259,11 +279,20 @@ export async function submitReportWithFirebase(
     if (photos && photos.length > 0) {
       for (let i = 0; i < photos.length; i++) {
         if (onProgress) {
-          onProgress(`Uploading photo ${i + 1} of ${photos.length} to Firebase Storage...`);
+          onProgress(`Processing and uploading photo ${i + 1} of ${photos.length}...`);
         }
-        const { downloadUrl, storagePath } = await uploadReportPhoto(photos[i], newId, i);
-        uploadedUrls.push(downloadUrl);
-        uploadedStoragePaths.push(storagePath);
+        try {
+          const { downloadUrl, storagePath } = await uploadReportPhoto(photos[i], newId, i);
+          uploadedUrls.push(downloadUrl);
+          uploadedStoragePaths.push(storagePath);
+        } catch (storageErr) {
+          console.warn(`Firebase Storage upload for photo ${i + 1} fell back to local image data:`, storageErr);
+          const p = photos[i];
+          const fallbackDataUrl = 'dataUrl' in p ? p.dataUrl : '';
+          if (fallbackDataUrl) {
+            uploadedUrls.push(fallbackDataUrl);
+          }
+        }
       }
     }
 
@@ -298,8 +327,24 @@ export async function submitReportWithFirebase(
       ],
     };
 
-    // 3. Save report to Firestore
-    await saveReportToFirestore(reportToSave);
+    // 3. Save report to Firestore, with seamless fallback to backend API
+    try {
+      await saveReportToFirestore(reportToSave);
+    } catch (firestoreErr) {
+      console.warn('Firestore write fallback to backend /api/reports endpoint:', firestoreErr);
+      const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => '') : '';
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(reportToSave),
+      });
+      if (!res.ok) {
+        throw firestoreErr;
+      }
+    }
 
     return reportToSave;
   } catch (err: any) {
@@ -372,6 +417,13 @@ export function normalizeFirestoreReport(d: any, id: string): CivicReport {
     official_response: d.official_response || '',
     verificationResult: d.verificationResult || undefined,
     escalationLadder: d.escalationLadder || undefined,
+
+    // Gemma 4 Multilingual Translation & Citizen Review
+    originalText: d.originalText || undefined,
+    originalLanguage: d.originalLanguage || undefined,
+    englishTranslation: d.englishTranslation || undefined,
+    translationReviewed: typeof d.translationReviewed === 'boolean' ? d.translationReviewed : undefined,
+    gemmaModelUsed: d.gemmaModelUsed || undefined,
   };
 }
 

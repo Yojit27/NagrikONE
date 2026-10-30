@@ -36,7 +36,7 @@ interface ProcedureViewProps {
   onOpenSocialTagging?: (report: CivicReport) => void;
   onOpenRti: (report: CivicReport) => void;
   onOpenLegalCounsel: (report: CivicReport) => void;
-  onSelectTab: (tab: 'home' | 'map' | 'sahayak' | 'badges' | 'analytics' | 'procedure') => void;
+  onSelectTab: (tab: string) => void;
 }
 
 export const ProcedureView: React.FC<ProcedureViewProps> = ({
@@ -290,6 +290,13 @@ export const ProcedureView: React.FC<ProcedureViewProps> = ({
               className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs sm:text-sm font-semibold border border-white/20 transition-all cursor-pointer flex items-center gap-2"
             >
               <span>Consult Sahayak AI</span>
+            </button>
+            <button
+              onClick={() => onSelectTab('about')}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs sm:text-sm font-semibold border border-emerald-500/30 transition-all cursor-pointer flex items-center gap-2"
+            >
+              <Info className="w-4 h-4 text-emerald-400" />
+              <span>About &amp; Civic Directives</span>
             </button>
           </div>
         </div>

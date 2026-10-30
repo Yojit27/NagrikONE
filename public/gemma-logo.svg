@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <linearGradient id="gemmaGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F46E5" />
+      <stop offset="50%" stop-color="#7C3AED" />
+      <stop offset="100%" stop-color="#06B6D4" />
+    </linearGradient>
+    <linearGradient id="gemmaGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#6366F1" />
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="12" fill="#0F172A" />
+  <!-- Gemma 4 Stylized Faceted Diamond / Neural Crystal -->
+  <path d="M24 7 L38 18 L24 41 L10 18 Z" fill="url(#gemmaGrad1)" opacity="0.95" />
+  <path d="M24 7 L38 18 L24 26 Z" fill="#93C5FD" opacity="0.6" />
+  <path d="M24 7 L10 18 L24 26 Z" fill="#C4B5FD" opacity="0.8" />
+  <path d="M10 18 L24 26 L24 41 Z" fill="url(#gemmaGrad2)" opacity="0.9" />
+  <path d="M38 18 L24 26 L24 41 Z" fill="#2563EB" opacity="0.85" />
+  <!-- Core highlight star -->
+  <circle cx="24" cy="22" r="2.5" fill="#FFFFFF" />
+</svg>

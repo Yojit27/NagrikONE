@@ -51,6 +51,16 @@ export const reports = pgTable('reports', {
   safetyHazards: text('safety_hazards'), // JSON stringified array
   timeline: text('timeline'), // JSON stringified timeline events
   verificationResult: text('verification_result'), // JSON stringified AI verification result
+  originalDescription: text('original_description'),
+  polishedDescriptionEn: text('polished_description_en'),
+  severityIndex: integer('severity_index'),
+  severityConfidence: doublePrecision('severity_confidence'),
+  severityExplanation: text('severity_explanation'),
+  manualCategory: text('manual_category'),
+  aiDetectedCategory: text('ai_detected_category'),
+  finalCategory: text('final_category'),
+  categoryConfidence: doublePrecision('category_confidence'),
+  categoryExplanation: text('category_explanation'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
