@@ -106,7 +106,7 @@ export const CivicMap: React.FC<CivicMapProps> = ({
 }) => {
   // Google Maps API Key from environment with hosted platform fallback
   const googleMapsApiKey =
-    (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string) || 'AIzaSyCAtcQPH9HpK6btw9f0xQ9x-yZWby3hc8Y';
+    (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string)
 
   // State Management
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('all');
