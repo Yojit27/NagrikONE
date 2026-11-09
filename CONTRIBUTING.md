@@ -19,7 +19,7 @@ Please maintain a collaborative, respectful, and constructive environment. Haras
 ### Local Setup
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/nagrik-one.git
+git clone https://github.com/Yojit27/nagrik-one.git
 cd nagrik-one
 
 # Install dependencies
