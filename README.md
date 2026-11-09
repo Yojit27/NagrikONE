@@ -95,7 +95,7 @@ When departments fail to remediate issues within their Citizen Charter SLAs:
 ### Installation
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/nagrik-one.git
+git clone https://github.com/Yojit27/nagrik-one.git
 cd nagrik-one
 
 # Install dependencies
