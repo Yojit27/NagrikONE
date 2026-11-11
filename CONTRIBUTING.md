@@ -1,4 +1,4 @@
-# Contributing to Nagrik One
+# Contributing to Nagrik One.
 
 Thank you for your interest in contributing to Nagrik One! We welcome contributions from developers, civic advocates, and designers committed to improving municipal accountability in India.
 
